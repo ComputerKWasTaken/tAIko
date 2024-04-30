@@ -1,44 +1,43 @@
-import cv2
+from PIL import Image
 import numpy as np
 from mss import mss
-import time
 import keyboard
 
+# Constants for screen area to capture
+MONITOR = {"top": 415, "left": 705, "width": 98, "height": 111}
+
+# Key bindings
+KEY_RED = 'f'
+KEY_BLUE = 'd'
+
+# Color thresholds for detection using Pillow
+COLOR_RED_RANGE = ((10, 25, 90), (20, 35, 100))
+COLOR_BLUE_RANGE = ((70, 70, 35), (80, 80, 45))
+COLOR_YELLOW_RANGE = ((0, 71, 95), (10, 81, 105))
+
+def detect_color_and_act(image, color_range, key):
+    image_np = np.array(image)
+    mask = cv2.inRange(image_np, *color_range)
+    if np.count_nonzero(mask) > 0:
+        keyboard.press(key)
+        keyboard.release(key)
+        return True
+    return False
+
 def screen_record():
-    last_time = time.time()
     with mss() as sct:
-        monitor = {"top": 415, "left": 705, "width": 98, "height": 111}
         while True:
-            screen = np.array(sct.grab(monitor))
-            screen = cv2.cvtColor(screen, cv2.COLOR_BGRA2RGB)
-            maskred = cv2.inRange(screen,(10,25,90),(20,35,100))
-            if cv2.countNonZero(maskred) > 0:
-                keyboard.press('f')
-                time.sleep(0.1)
-                keyboard.release('f')
-            else:
-                maskblue = cv2.inRange(screen,(70,70,35),(80,80,45))
-                if cv2.countNonZero(maskblue) > 0:
-                    keyboard.press('d')
-                    time.sleep(0.1)
-                    keyboard.release('d')
-                else:
-                    maskyellow = cv2.inRange(screen,(0,71,95.3),(0,71,95.3))
-                    while(cv2.countNonZero(maskyellow) > 0):
-                        keyboard.press('f')
-                        time.sleep(0.1)
-                        keyboard.release('f')
-                        time.sleep(0.1)
-                        keyboard.press('d')
-                        time.sleep(0.1)
-                        keyboard.release('d')
-                        screen = np.array(sct.grab(monitor))
-                        screen = cv2.cvtColor(screen,cv2.COLOR_BGRA2RGB)
-                        maskyellow = cv2.inRange(screen,(0,71,95.3),(0,71,95.3))
+            image = Image.frombytes('RGB', (sct.monitors[0]['width'], sct.monitors[0]['height']), sct.shot(output='bytes'))
+            screen = image.crop((MONITOR['left'], MONITOR['top'], MONITOR['left'] + MONITOR['width'], MONITOR['top'] + MONITOR['height']))
 
-            if cv2.waitKey(25) & 0xFF == ord('q'):
-                cv2.destroyAllWindows()
-                break
+            if detect_color_and_act(screen, COLOR_RED_RANGE, KEY_RED):
+                continue
+            if detect_color_and_act(screen, COLOR_BLUE_RANGE, KEY_BLUE):
+                continue
 
-if __name__=="__main__":
+            while detect_color_and_act(screen, COLOR_YELLOW_RANGE, KEY_RED):
+                detect_color_and_act(screen, COLOR_YELLOW_RANGE, KEY_BLUE)
+                screen = Image.frombytes('RGB', (sct.monitors[0]['width'], sct.monitors[0]['height']), sct.shot(output='bytes')).crop((MONITOR['left'], MONITOR['top'], MONITOR['left'] + MONITOR['width'], MONITOR['top'] + MONITOR['height']))
+
+if __name__ == "__main__":
     screen_record()
